@@ -12,15 +12,14 @@ const {
     Events 
 } = require("discord.js");
 const { Player } = require("discord-player");
-// Import Extractor Spesifik
-const { YouTubeExtractor, DefaultExtractors } = require("@discord-player/extractor");
+const { DefaultExtractors } = require("@discord-player/extractor");
 
 process.env.FFMPEG_PATH = require("ffmpeg-static");
 
 // --- KONFIGURASI ---
 const MY_ID = process.env.OWNER_ID;
 
-// --- COOKIE CONFIGURATION (LANGSUNG DISINI) ---
+// --- COOKIE DATA (Paste Array JSON Anda disini) ---
 const RAW_COOKIES = [
     { "name": "__Secure-1PAPISID", "value": "oaYmftOvotSQC79c/AFfMZ-Gj9DLssLHn-" },
     { "name": "__Secure-1PSID", "value": "g.a0003ghaglpLJ9c7Jefz2A-A5WesvTDyvZ31gHOU4ECQyoW9dLOyTg59-VbqhZoP3PtTCauHMQACgYKAQ0SARESFQHGX2MijwrMe2JkFJsVRCzHmCsHSxoVAUF8yKpVd0EO8-CpURDdBnIQcjyD0076" },
@@ -40,7 +39,7 @@ const RAW_COOKIES = [
     { "name": "SSID", "value": "AxqYnn5RkHMWoroe4" }
 ];
 
-// Ubah JSON Array menjadi String format HTTP Header (PENTING!)
+// Konversi Cookie ke format Header HTTP
 const COOKIE_STRING = RAW_COOKIES.map(c => `${c.name}=${c.value}`).join('; ');
 
 const client = new Client({
@@ -51,15 +50,15 @@ const client = new Client({
   ],
 });
 
-// Setup Player
+// --- SETUP PLAYER (COOKIE DISUNTIKKAN DISINI) ---
 client.player = new Player(client, {
   ytdlOptions: { 
       quality: "highestaudio", 
       highWaterMark: 1 << 25,
-      // Inject Cookie ke Player Utama juga (Backup)
       requestOptions: {
           headers: {
-              cookie: COOKIE_STRING
+              cookie: COOKIE_STRING, // <--- Ini Kuncinya!
+              'x-youtube-identity-token': RAW_COOKIES.find(c => c.name === 'ID_TOKEN')?.value || ''
           }
       }
   },
@@ -87,18 +86,11 @@ if (fs.existsSync(foldersPath)) {
     }
 }
 
-// Event Ready: Register Extractor dengan Cookie
+// --- PERBAIKAN READY EVENT ---
+// Kita pakai loadMulti biasa saja agar tidak crash
 client.once(Events.ClientReady, async () => {
-  // 1. Load Extractor Default tapi KECUALIKAN YouTube
-  const config = DefaultExtractors.filter(ext => ext !== 'YouTubeExtractor');
-  await client.player.extractors.loadMulti(config);
-
-  // 2. Register YouTube Extractor dengan Cookie
-  await client.player.extractors.register(YouTubeExtractor, {
-      authentication: COOKIE_STRING
-  });
-
-  console.log(`🤖 ${client.user.tag} Siap! (Mode: Cookie Authenticated)`);
+  await client.player.extractors.loadMulti(DefaultExtractors);
+  console.log(`🤖 ${client.user.tag} Siap! (Mode: Cookie via Player Config)`);
 });
 
 // --- EVENT MUSIK ---
@@ -138,13 +130,10 @@ client.player.events.on("playerError", (queue, error) => {
 
 // --- HANDLE INTERACTION ---
 client.on(Events.InteractionCreate, async (interaction) => {
-    
-    // Keamanan
     if (interaction.user.id !== MY_ID) {
         return interaction.reply({ content: "❌ Bot Pribadi.", ephemeral: true });
     }
 
-    // Handle Slash
     if (interaction.isChatInputCommand()) {
         const command = interaction.client.commands.get(interaction.commandName);
         if (!command) return;
@@ -152,19 +141,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
         try {
             await command.execute(interaction);
         } catch (error) {
-            console.error("Cmd Err:", error);
-            try {
-                if (interaction.replied || interaction.deferred) {
-                    await interaction.followUp({ content: '❌ Error!', ephemeral: true });
-                } else {
-                    await interaction.reply({ content: '❌ Error!', ephemeral: true });
-                }
-            } catch (e) {}
+            console.error(error);
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: '❌ Error!', ephemeral: true }).catch(()=>{});
+            } else {
+                await interaction.reply({ content: '❌ Error!', ephemeral: true }).catch(()=>{});
+            }
         }
-    } 
-    
-    // Handle Button
-    else if (interaction.isButton()) {
+    } else if (interaction.isButton()) {
         const queue = client.player.nodes.get(interaction.guild.id);
         if (!queue) return interaction.reply({ content: "❌ Musik mati.", ephemeral: true });
 
@@ -175,7 +159,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 case 'skip': queue.node.skip(); return interaction.reply({ content: "⏭️", ephemeral: true });
                 case 'stop': queue.delete(); return interaction.reply({ content: "🛑", ephemeral: true });
             }
-        } catch (e) {}
+        } catch (e) { }
     }
 });
 
