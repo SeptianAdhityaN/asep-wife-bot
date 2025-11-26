@@ -2,16 +2,46 @@ require("dotenv").config();
 const fs = require('fs');
 const path = require('path');
 const { 
-    Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Events 
+    Client, 
+    GatewayIntentBits, 
+    Collection, 
+    EmbedBuilder, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    Events 
 } = require("discord.js");
 const { Player } = require("discord-player");
-const { DefaultExtractors } = require("@discord-player/extractor");
+// Import Extractor Spesifik
+const { YouTubeExtractor, DefaultExtractors } = require("@discord-player/extractor");
 
-// Paksa lokasi FFmpeg
 process.env.FFMPEG_PATH = require("ffmpeg-static");
 
 // --- KONFIGURASI ---
-const MY_ID = "707811317053915207";
+const MY_ID = process.env.OWNER_ID;
+
+// --- COOKIE CONFIGURATION (LANGSUNG DISINI) ---
+const RAW_COOKIES = [
+    { "name": "__Secure-1PAPISID", "value": "oaYmftOvotSQC79c/AFfMZ-Gj9DLssLHn-" },
+    { "name": "__Secure-1PSID", "value": "g.a0003ghaglpLJ9c7Jefz2A-A5WesvTDyvZ31gHOU4ECQyoW9dLOyTg59-VbqhZoP3PtTCauHMQACgYKAQ0SARESFQHGX2MijwrMe2JkFJsVRCzHmCsHSxoVAUF8yKpVd0EO8-CpURDdBnIQcjyD0076" },
+    { "name": "__Secure-1PSIDCC", "value": "AKEyXzWdoODiCfNhiF2zzPuQNqkkNRDIjys94-pIoaMeAq_6k3w1_3qnqwQ1_Te_OGDDQaRdNA" },
+    { "name": "__Secure-1PSIDTS", "value": "sidts-CjQBwQ9iI9jRCNTSFygmBTyE2-ns_qZyhrfA93lIxBRu5x-sGkKAS78o6UgtlTRTgtkuhruNEAA" },
+    { "name": "__Secure-3PAPISID", "value": "oaYmftOvotSQC79c/AFfMZ-Gj9DLssLHn-" },
+    { "name": "__Secure-3PSID", "value": "g.a0003ghaglpLJ9c7Jefz2A-A5WesvTDyvZ31gHOU4ECQyoW9dLOyt3wZA7dUCYhVgpflHaAbggACgYKAb8SARESFQHGX2Miw7QqmN9AqGS_anyuBBGDRxoVAUF8yKo77Gzq9dFpz1VcLqcQRin_0076" },
+    { "name": "__Secure-3PSIDCC", "value": "AKEyXzXqgo7tbowtHdCpbJm6KccRo4BWJllQuNm3Lz4Tb00aE2Rirh35AOCBRCSUf65L-WUc9l8" },
+    { "name": "__Secure-3PSIDTS", "value": "sidts-CjQBwQ9iI9jRCNTSFygmBTyE2-ns_qZyhrfA93lIxBRu5x-sGkKAS78o6UgtlTRTgtkuhruNEAA" },
+    { "name": "APISID", "value": "b5_C_PdRHlSe3kyg/AjG3z8jT7srtOx3yS" },
+    { "name": "HSID", "value": "AeTWVDTN4c_FkH0XO" },
+    { "name": "LOGIN_INFO", "value": "AFmmF2swRQIhAJm-pofi7omU_fFCzjHyQOfgo1ii76POiqUQ-0ukKKoMAiBRtB5o81GZNYz03zoHr27S1TPx3ffe9k-EqxZKondXaQ:QUQ3MjNmeUdJM3g4VVc2LU8wWDctOG9JWnlQX01sNE1mVXVNVURZaUdmRGstSnZ0OGJQUDZtLVc3dkFrZXI5U1FVN3JXbG9zWkN2Si1fVlMzOUdseVBGQ0hhYllVTEFzcE5ncy1HcVJBbXlwdFIya1c2RE1UN1dmQlhsTm1JRnpBT21CUFNsQlhNTGhLOHdGbm95dTRoRlhvZW4zOWJGM1R3" },
+    { "name": "PREF", "value": "tz=Asia.Bangkok&f4=4000000&f6=40000000&f5=30000&f7=100" },
+    { "name": "SAPISID", "value": "oaYmftOvotSQC79c/AFfMZ-Gj9DLssLHn-" },
+    { "name": "SID", "value": "g.a0003ghaglpLJ9c7Jefz2A-A5WesvTDyvZ31gHOU4ECQyoW9dLOyBPm9SFGNExyIZW1WWuYD6wACgYKAWwSARESFQHGX2MirQVoQ8RPnVjTomqneygZKRoVAUF8yKoiJk7r79H_Y0jiMqI1fa8m0076" },
+    { "name": "SIDCC", "value": "AKEyXzW_ZlOzpi_KbsLKtM1ngeGZCVLuZSwDkERP6oZuxCvHMCsyd3u598QE0VRr72AxpLsZna4" },
+    { "name": "SSID", "value": "AxqYnn5RkHMWoroe4" }
+];
+
+// Ubah JSON Array menjadi String format HTTP Header (PENTING!)
+const COOKIE_STRING = RAW_COOKIES.map(c => `${c.name}=${c.value}`).join('; ');
 
 const client = new Client({
   intents: [
@@ -21,13 +51,19 @@ const client = new Client({
   ],
 });
 
-// --- SETUP PLAYER DENGAN MEDIAPLEX ---
+// Setup Player
 client.player = new Player(client, {
   ytdlOptions: { 
       quality: "highestaudio", 
-      highWaterMark: 1 << 25 
+      highWaterMark: 1 << 25,
+      // Inject Cookie ke Player Utama juga (Backup)
+      requestOptions: {
+          headers: {
+              cookie: COOKIE_STRING
+          }
+      }
   },
-  skipOnNoStream: true
+  skipOnNoStream: true 
 });
 
 // Load Commands
@@ -51,17 +87,25 @@ if (fs.existsSync(foldersPath)) {
     }
 }
 
+// Event Ready: Register Extractor dengan Cookie
 client.once(Events.ClientReady, async () => {
-  // Load Extractors
-  await client.player.extractors.loadMulti(DefaultExtractors);
-  console.log(`🤖 ${client.user.tag} Siap! (Mediaplex & FFmpeg Ready)`);
+  // 1. Load Extractor Default tapi KECUALIKAN YouTube
+  const config = DefaultExtractors.filter(ext => ext !== 'YouTubeExtractor');
+  await client.player.extractors.loadMulti(config);
+
+  // 2. Register YouTube Extractor dengan Cookie
+  await client.player.extractors.register(YouTubeExtractor, {
+      authentication: COOKIE_STRING
+  });
+
+  console.log(`🤖 ${client.user.tag} Siap! (Mode: Cookie Authenticated)`);
 });
 
 // --- EVENT MUSIK ---
 client.player.events.on("playerStart", (queue, track) => {
     if (track.url.includes("google.com/translate_tts")) return;
 
-    const requester = track.requestedBy ? track.requestedBy.username : "Auto";
+    const requester = track.requestedBy ? track.requestedBy.username : "System";
 
     const embed = new EmbedBuilder()
         .setTitle(`💿 Sedang Memutar`)
@@ -92,30 +136,35 @@ client.player.events.on("playerError", (queue, error) => {
     }
 });
 
-client.player.events.on("error", (queue, error) => {
-    console.log(`[Connection Error] ${error.message}`);
-});
-
-// --- INTERACTION HANDLER ---
+// --- HANDLE INTERACTION ---
 client.on(Events.InteractionCreate, async (interaction) => {
+    
+    // Keamanan
     if (interaction.user.id !== MY_ID) {
         return interaction.reply({ content: "❌ Bot Pribadi.", ephemeral: true });
     }
 
+    // Handle Slash
     if (interaction.isChatInputCommand()) {
         const command = interaction.client.commands.get(interaction.commandName);
         if (!command) return;
+
         try {
             await command.execute(interaction);
         } catch (error) {
-            console.error(error);
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: '❌ Error!', ephemeral: true }).catch(()=>{});
-            } else {
-                await interaction.reply({ content: '❌ Error!', ephemeral: true }).catch(()=>{});
-            }
+            console.error("Cmd Err:", error);
+            try {
+                if (interaction.replied || interaction.deferred) {
+                    await interaction.followUp({ content: '❌ Error!', ephemeral: true });
+                } else {
+                    await interaction.reply({ content: '❌ Error!', ephemeral: true });
+                }
+            } catch (e) {}
         }
-    } else if (interaction.isButton()) {
+    } 
+    
+    // Handle Button
+    else if (interaction.isButton()) {
         const queue = client.player.nodes.get(interaction.guild.id);
         if (!queue) return interaction.reply({ content: "❌ Musik mati.", ephemeral: true });
 
@@ -126,7 +175,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 case 'skip': queue.node.skip(); return interaction.reply({ content: "⏭️", ephemeral: true });
                 case 'stop': queue.delete(); return interaction.reply({ content: "🛑", ephemeral: true });
             }
-        } catch (e) { }
+        } catch (e) {}
     }
 });
 
