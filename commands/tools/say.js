@@ -1,35 +1,50 @@
 const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
-	data: new SlashCommandBuilder()
-		.setName('say')
-		.setDescription('Istri Asep Berbicara')
-        .addStringOption(option => option.setName('text').setDescription('Text').setRequired(true)),
+    data: new SlashCommandBuilder()
+        .setName('say')
+        .setDescription('Istri Asep Berbicara (TTS)')
+        .addStringOption(option => 
+            option.setName('text')
+                .setDescription('Kata-kata yang ingin diucapkan')
+                .setRequired(true)),
 
-	async execute(interaction, message, args) {
-        let text, channel, member, textChannel;
-
-        if (interaction) {
-            text = interaction.options.getString("text");
-            channel = interaction.member.voice.channel;
-            member = interaction.member;
-            textChannel = interaction.channel;
-            await interaction.reply({ content: "🗣️ Mengucapkan...", flags: InteractionFlags.Ephemeral
- });
-        } else {
-            text = args.join(" ");
-            channel = message.member.voice.channel;
-            member = message.member;
-            textChannel = message.channel;
+    async execute(interaction) {
+        const text = interaction.options.getString("text");
+        const channel = interaction.member.voice.channel;
+        
+        // 1. Validasi
+        if (!channel) {
+            return interaction.reply({ 
+                content: "❌ Masuk voice dulu dong.", 
+                ephemeral: true 
+            });
         }
 
-        if (!channel) return; // Silent fail kalau gak di voice
+        // 2. Beri respon cepat
+        await interaction.reply({ content: "🗣️ Mengucapkan...", ephemeral: true });
 
+        // 3. Generate URL Google Translate
         const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=id&client=tw-ob`;
         
-        const player = (interaction || message).client.player;
-        await player.play(channel, url, { 
-            nodeOptions: { metadata: { channel: textChannel }, leaveOnEnd: false } 
-        });
-	},
+        const player = interaction.client.player;
+
+        try {
+            // 4. Play Audio (Dengan settingan anti-kabur)
+            await player.play(channel, url, { 
+                nodeOptions: { 
+                    metadata: { channel: interaction.channel }, 
+                    selfDeaf: true,
+                    volume: 80,
+                    leaveOnEnd: false, 
+                    leaveOnStop: false, 
+                    leaveOnEmpty: false,
+                    leaveOnEmptyCooldown: 0
+                } 
+            });
+        } catch (e) {
+            console.error("TTS Error:", e);
+            // Tidak perlu reply error ke user karena kita sudah reply "Mengucapkan..." di awal
+        }
+    },
 };

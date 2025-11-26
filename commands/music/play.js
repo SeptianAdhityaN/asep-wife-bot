@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { QueryType } = require("discord-player"); // Import QueryType
+const { QueryType } = require("discord-player");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,61 +12,58 @@ module.exports = {
         .setRequired(true)
     ),
 
-  async execute(interaction, message, args) {
-    let query, channel, member, textChannel;
+  async execute(interaction) {
+    const query = interaction.options.getString("query");
+    const channel = interaction.member.voice.channel;
+    const textChannel = interaction.channel;
 
-    // 1. Deteksi Slash vs Prefix
-    if (interaction) {
-      query = interaction.options.getString("query");
-      member = interaction.member;
-      channel = interaction.member.voice.channel;
-      textChannel = interaction.channel;
-      await interaction.deferReply();
-    } else {
-      query = args.join(" ");
-      member = message.member;
-      channel = message.member.voice.channel;
-      textChannel = message.channel;
+    // 1. Validasi Voice Channel
+    if (!channel) {
+      return interaction.reply({
+        content: "❌ Masuk voice channel dulu.",
+        ephemeral: true,
+      });
     }
 
-    // 2. Validasi
-    if (!query)
-      return reply(interaction, message, "❌ Masukkan judul lagu atau link!");
-    if (!channel)
-      return reply(interaction, message, "❌ Masuk voice channel dulu.");
+    // 2. Safe Defer (Agar tidak error "Already Acknowledged")
+    try {
+        if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply();
+        }
+    } catch (e) {
+        return; // Stop jika interaksi sudah mati
+    }
 
-    const player = (interaction || message).client.player;
+    const player = interaction.client.player;
 
     try {
-      // 3. Setup Queue
-      const queue = player.nodes.create(member.guild, {
+      // 3. Setup Queue dengan Konfigurasi "JANGKAR" (Anti Keluar)
+      const queue = player.nodes.create(interaction.guild, {
         metadata: { channel: textChannel },
         selfDeaf: true,
         volume: 80,
-        leaveOnEnd: false,
-        leaveOnEmpty: false,
-        leaveOnEmptyCooldown: 300000,
+        
+        // --- KONFIGURASI AGAR BOT TIDAK KELUAR ---
+        leaveOnEnd: false,        // Jangan keluar saat lagu habis
+        leaveOnStop: false,       // Jangan keluar saat di-stop
+        leaveOnEmpty: false,      // Jangan keluar saat channel sepi (tidak ada orang)
+        leaveOnEmptyCooldown: 0,  // Matikan timer cooldown
+        // -----------------------------------------
       });
 
       if (!queue.connection) await queue.connect(channel);
 
-      // 4. SMART SEARCH LOGIC
-      // Kita gunakan 'search' dulu untuk melihat apa yang ditemukan sebelum memainkannya
+      // 4. Smart Search
       const searchResult = await player.search(query, {
-        requestedBy: member,
-        searchEngine: QueryType.AUTO, // Otomatis deteksi (Spotify Link / YT Search / Playlist)
+        requestedBy: interaction.user,
+        searchEngine: QueryType.AUTO,
       });
 
       if (!searchResult || !searchResult.tracks.length) {
-        return reply(
-          interaction,
-          message,
-          "❌ Lagu tidak ditemukan. Coba sertakan nama penyanyi."
-        );
+        return interaction.editReply("❌ Lagu tidak ditemukan. Coba sertakan nama penyanyi.");
       }
 
       // 5. Eksekusi Play
-      // Kita langsung masukkan hasil searchResult agar lebih akurat
       const entry = await queue.play(searchResult, {
         nodeOptions: { metadata: { channel: textChannel } },
       });
@@ -74,32 +71,29 @@ module.exports = {
       // 6. Respon Embed
       const embed = new EmbedBuilder().setColor("#00FF00");
 
-      // Cek apakah yang dimasukkan itu Playlist atau Single Track
       if (searchResult.playlist) {
         embed.setDescription(
-          `Menambahkan Playlist **${searchResult.playlist.title}** (${searchResult.tracks.length} lagu) ke antrian.\n🔗 Sumber: ${searchResult.playlist.source}`
+          `✅ Menambahkan Playlist **${searchResult.playlist.title}** (${searchResult.tracks.length} lagu) ke antrian.`
         );
       } else {
+        // Gunakan data dari entry.track agar akurat
+        const trackTitle = entry.track.title;
+        const trackAuthor = entry.track.author;
         embed.setDescription(
-          `Menambahkan **${entry.track.title}** - *${entry.track.author}* ke antrian.`
+          `✅ Menambahkan **${trackTitle}** - *${trackAuthor}* ke antrian.`
         );
       }
 
-      reply(interaction, message, { embeds: [embed] });
+      return interaction.editReply({ embeds: [embed] });
+
     } catch (e) {
-      console.error(e); // Log error asli ke console biar tau kenapa
-      reply(interaction, message, `❌ Gagal memuat: ${e.message}`);
+      console.error(e);
+      // Error Handling Anti-Crash
+      if (interaction.deferred || interaction.replied) {
+         return interaction.editReply(`❌ Gagal memuat: ${e.message}`);
+      } else {
+         return interaction.reply({ content: `❌ Error: ${e.message}`, ephemeral: true });
+      }
     }
   },
 };
-
-// Helper function biar kodingan rapi (bisa balas slash atau prefix)
-async function reply(interaction, message, content) {
-  if (interaction) {
-    // Jika interaction sudah di-defer, pakai editReply
-    if (interaction.deferred || interaction.replied)
-      return await interaction.editReply(content);
-    return await interaction.reply(content);
-  }
-  return await message.reply(content);
-}

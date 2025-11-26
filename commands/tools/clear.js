@@ -1,36 +1,50 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
-	data: new SlashCommandBuilder()
-		.setName('clear')
-		.setDescription('Menghapus pesan chat secara massal')
-        .addIntegerOption(option => 
-            option.setName('jumlah')
-                .setDescription('Jumlah pesan yang dihapus (Maks 100)')
-                .setRequired(true))
-        // Opsional: Hanya izinkan user yang punya izin Manage Messages
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages), 
-	async execute(interaction) {
-        const amount = interaction.options.getInteger('jumlah');
+    data: new SlashCommandBuilder()
+        .setName('say')
+        .setDescription('Istri Asep Berbicara (TTS)')
+        .addStringOption(option => 
+            option.setName('text')
+                .setDescription('Kata-kata yang ingin diucapkan')
+                .setRequired(true)),
 
-        if (amount < 1 || amount > 100) {
-            return interaction.reply({ content: '❌ Masukkan jumlah antara 1 sampai 100.', flags: InteractionFlags.Ephemeral
- });
+    async execute(interaction) {
+        const text = interaction.options.getString("text");
+        const channel = interaction.member.voice.channel;
+        
+        // 1. Validasi
+        if (!channel) {
+            return interaction.reply({ 
+                content: "❌ Masuk voice dulu dong.", 
+                ephemeral: true 
+            });
         }
+
+        // 2. Beri respon cepat
+        await interaction.reply({ content: "🗣️ Mengucapkan...", ephemeral: true });
+
+        // 3. Generate URL Google Translate
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=id&client=tw-ob`;
+        
+        const player = interaction.client.player;
 
         try {
-            await interaction.channel.bulkDelete(amount, true);
-            
-            // Kirim pesan konfirmasi lalu hapus otomatis setelah 3 detik
-            const msg = await interaction.reply({ content: `🧹 Berhasil menghapus ${amount} pesan!`, fetchReply: true });
-            setTimeout(() => {
-                msg.delete().catch(() => {});
-            }, 3000);
-
-        } catch (error) {
-            console.error(error);
-            return interaction.reply({ content: '❌ Gagal menghapus pesan. Pesan mungkin lebih tua dari 14 hari.', flags: InteractionFlags.Ephemeral
- });
+            // 4. Play Audio (Dengan settingan anti-kabur)
+            await player.play(channel, url, { 
+                nodeOptions: { 
+                    metadata: { channel: interaction.channel }, 
+                    selfDeaf: true,
+                    volume: 80,
+                    leaveOnEnd: false, 
+                    leaveOnStop: false, 
+                    leaveOnEmpty: false,
+                    leaveOnEmptyCooldown: 0
+                } 
+            });
+        } catch (e) {
+            console.error("TTS Error:", e);
+            // Tidak perlu reply error ke user karena kita sudah reply "Mengucapkan..." di awal
         }
-	},
+    },
 };
