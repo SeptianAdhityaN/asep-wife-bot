@@ -17,7 +17,6 @@ module.exports = {
     const channel = interaction.member.voice.channel;
     const textChannel = interaction.channel;
 
-    // 1. Validasi Voice Channel
     if (!channel) {
       return interaction.reply({
         content: "❌ Masuk voice channel dulu.",
@@ -25,74 +24,70 @@ module.exports = {
       });
     }
 
-    // 2. Safe Defer (Agar tidak error "Already Acknowledged")
     try {
-        if (!interaction.deferred && !interaction.replied) {
-            await interaction.deferReply();
-        }
-    } catch (e) {
-        return; // Stop jika interaksi sudah mati
-    }
+      if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply();
+      }
+    } catch (e) { return; }
 
     const player = interaction.client.player;
 
     try {
-      // 3. Setup Queue dengan Konfigurasi "JANGKAR" (Anti Keluar)
       const queue = player.nodes.create(interaction.guild, {
         metadata: { channel: textChannel },
         selfDeaf: true,
         volume: 80,
-        
-        // --- KONFIGURASI AGAR BOT TIDAK KELUAR ---
-        leaveOnEnd: false,        // Jangan keluar saat lagu habis
-        leaveOnStop: false,       // Jangan keluar saat di-stop
-        leaveOnEmpty: false,      // Jangan keluar saat channel sepi (tidak ada orang)
-        leaveOnEmptyCooldown: 0,  // Matikan timer cooldown
-        // -----------------------------------------
+        leaveOnEnd: false, 
+        leaveOnStop: false,
+        leaveOnEmpty: false, 
+        leaveOnEmptyCooldown: 0, 
       });
 
       if (!queue.connection) await queue.connect(channel);
 
-      // 4. Smart Search
+      // --- PERBAIKAN UTAMA: SMART ENGINE DETECTION ---
+      // Cek apakah input user adalah URL (Link) atau Teks biasa
+      const isUrl = query.includes("http") || query.includes("www") || query.includes("youtu");
+      
+      // Jika Link -> Gunakan AUTO (Biar dia deteksi sendiri itu Spotify/YT/Soundcloud)
+      // Jika Teks -> Paksa YOUTUBE_SEARCH (Agar pasti cari di YouTube)
+      const searchEngine = isUrl ? QueryType.AUTO : QueryType.YOUTUBE_SEARCH;
+
       const searchResult = await player.search(query, {
         requestedBy: interaction.user,
-        searchEngine: QueryType.AUTO,
+        searchEngine: searchEngine, // <--- Pakai logika baru
       });
 
       if (!searchResult || !searchResult.tracks.length) {
-        return interaction.editReply("❌ Lagu tidak ditemukan. Coba sertakan nama penyanyi.");
+        return interaction.editReply("❌ Lagu tidak ditemukan / Link tidak valid.");
       }
 
-      // 5. Eksekusi Play
       const entry = await queue.play(searchResult, {
         nodeOptions: { metadata: { channel: textChannel } },
       });
 
-      // 6. Respon Embed
       const embed = new EmbedBuilder().setColor("#00FF00");
 
       if (searchResult.playlist) {
         embed.setDescription(
-          `✅ Menambahkan Playlist **${searchResult.playlist.title}** (${searchResult.tracks.length} lagu) ke antrian.`
+          `✅ Menambahkan Playlist **${searchResult.playlist.title}** (${searchResult.tracks.length} lagu).`
         );
       } else {
-        // Gunakan data dari entry.track agar akurat
         const trackTitle = entry.track.title;
         const trackAuthor = entry.track.author;
         embed.setDescription(
-          `✅ Menambahkan **${trackTitle}** - *${trackAuthor}* ke antrian.`
+          `✅ Menambahkan **${trackTitle}** - *${trackAuthor}*`
         );
       }
 
       return interaction.editReply({ embeds: [embed] });
 
-    } catch (e) {
-      console.error(e);
-      // Error Handling Anti-Crash
+    } catch (err) {
+      console.error(err);
       if (interaction.deferred || interaction.replied) {
-         return interaction.editReply(`❌ Gagal memuat: ${e.message}`);
+         return interaction.editReply(`❌ Gagal: ${err.message}`);
       } else {
-         return interaction.reply({ content: `❌ Error: ${e.message}`, ephemeral: true });
+         return interaction.reply({ content: `❌ Error: ${err.message}`, ephemeral: true });
       }
     }
   },

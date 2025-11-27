@@ -108,7 +108,7 @@ client.player.events.on("playerStart", (queue, track) => {
             { name: 'Requested by', value: requester, inline: true }
         )
         .setColor('#FF69B4')
-        .setFooter({ text: 'Asisten Pribadi Asep\'s Wife 💕' });
+        .setFooter({ text: 'Asisten Pribadi Asep - Eisha💕' });
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('pause').setEmoji('⏸️').setStyle(ButtonStyle.Secondary),
