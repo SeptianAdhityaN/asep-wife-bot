@@ -5,13 +5,36 @@ const {
     Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Events 
 } = require("discord.js");
 const { Player } = require("discord-player");
-
-// --- IMPORT LIBRARY PENYELAMAT ---
-const { YoutubeiExtractor } = require("discord-player-youtubei");
+// Import Extractor Standar
+const { DefaultExtractors } = require("@discord-player/extractor");
+const play = require('play-dl'); 
 
 process.env.FFMPEG_PATH = require("ffmpeg-static");
 
-const MY_ID = "707811317053915207"; // ID Owner
+// --- KONFIGURASI (DARI ENV) ---
+const MY_ID = process.env.OWNER_ID; // Pastikan OWNER_ID ada di file .env
+
+// --- COOKIE CONFIGURATION (Anti Blokir) ---
+const RAW_COOKIES = [
+    { "name": "__Secure-1PAPISID", "value": "oaYmftOvotSQC79c/AFfMZ-Gj9DLssLHn-" },
+    { "name": "__Secure-1PSID", "value": "g.a0003ghaglpLJ9c7Jefz2A-A5WesvTDyvZ31gHOU4ECQyoW9dLOyTg59-VbqhZoP3PtTCauHMQACgYKAQ0SARESFQHGX2MijwrMe2JkFJsVRCzHmCsHSxoVAUF8yKpVd0EO8-CpURDdBnIQcjyD0076" },
+    { "name": "__Secure-1PSIDCC", "value": "AKEyXzWdoODiCfNhiF2zzPuQNqkkNRDIjys94-pIoaMeAq_6k3w1_3qnqwQ1_Te_OGDDQaRdNA" },
+    { "name": "__Secure-1PSIDTS", "value": "sidts-CjQBwQ9iI9jRCNTSFygmBTyE2-ns_qZyhrfA93lIxBRu5x-sGkKAS78o6UgtlTRTgtkuhruNEAA" },
+    { "name": "__Secure-3PAPISID", "value": "oaYmftOvotSQC79c/AFfMZ-Gj9DLssLHn-" },
+    { "name": "__Secure-3PSID", "value": "g.a0003ghaglpLJ9c7Jefz2A-A5WesvTDyvZ31gHOU4ECQyoW9dLOyt3wZA7dUCYhVgpflHaAbggACgYKAb8SARESFQHGX2Miw7QqmN9AqGS_anyuBBGDRxoVAUF8yKo77Gzq9dFpz1VcLqcQRin_0076" },
+    { "name": "__Secure-3PSIDCC", "value": "AKEyXzXqgo7tbowtHdCpbJm6KccRo4BWJllQuNm3Lz4Tb00aE2Rirh35AOCBRCSUf65L-WUc9l8" },
+    { "name": "__Secure-3PSIDTS", "value": "sidts-CjQBwQ9iI9jRCNTSFygmBTyE2-ns_qZyhrfA93lIxBRu5x-sGkKAS78o6UgtlTRTgtkuhruNEAA" },
+    { "name": "APISID", "value": "b5_C_PdRHlSe3kyg/AjG3z8jT7srtOx3yS" },
+    { "name": "HSID", "value": "AeTWVDTN4c_FkH0XO" },
+    { "name": "LOGIN_INFO", "value": "AFmmF2swRQIhAJm-pofi7omU_fFCzjHyQOfgo1ii76POiqUQ-0ukKKoMAiBRtB5o81GZNYz03zoHr27S1TPx3ffe9k-EqxZKondXaQ:QUQ3MjNmeUdJM3g4VVc2LU8wWDctOG9JWnlQX01sNE1mVXVNVURZaUdmRGstSnZ0OGJQUDZtLVc3dkFrZXI5U1FVN3JXbG9zWkN2Si1fVlMzOUdseVBGQ0hhYllVTEFzcE5ncy1HcVJBbXlwdFIya1c2RE1UN1dmQlhsTm1JRnpBT21CUFNsQlhNTGhLOHdGbm95dTRoRlhvZW4zOWJGM1R3" },
+    { "name": "PREF", "value": "tz=Asia.Bangkok&f4=4000000&f6=40000000&f5=30000&f7=100" },
+    { "name": "SAPISID", "value": "oaYmftOvotSQC79c/AFfMZ-Gj9DLssLHn-" },
+    { "name": "SID", "value": "g.a0003ghaglpLJ9c7Jefz2A-A5WesvTDyvZ31gHOU4ECQyoW9dLOyBPm9SFGNExyIZW1WWuYD6wACgYKAWwSARESFQHGX2MirQVoQ8RPnVjTomqneygZKRoVAUF8yKoiJk7r79H_Y0jiMqI1fa8m0076" },
+    { "name": "SIDCC", "value": "AKEyXzW_ZlOzpi_KbsLKtM1ngeGZCVLuZSwDkERP6oZuxCvHMCsyd3u598QE0VRr72AxpLsZna4" },
+    { "name": "SSID", "value": "AxqYnn5RkHMWoroe4" }
+];
+
+const COOKIE_STRING = RAW_COOKIES.map(c => `${c.name}=${c.value}`).join('; ');
 
 const client = new Client({
   intents: [
@@ -21,15 +44,47 @@ const client = new Client({
   ],
 });
 
+// --- INJECT COOKIE KE PLAY-DL ---
+play.setToken({
+    youtube: {
+        cookie: COOKIE_STRING
+    }
+});
+
 // Setup Player
 client.player = new Player(client, {
   ytdlOptions: { 
       quality: "highestaudio", 
-      highWaterMark: 1 << 25
+      highWaterMark: 1 << 25,
+      // Backup Cookie di Player Utama
+      requestOptions: {
+          headers: { cookie: COOKIE_STRING }
+      }
   },
-  // Opsi ini mencegah bot crash jika stream gagal
   skipOnNoStream: true 
 });
+
+// --- CUSTOM STREAMER (Logic Pintar) ---
+const PlayDLExtractor = {
+    name: 'play-dl-extractor',
+    priority: 100, // Prioritas tertinggi
+    async stream(track) {
+        // Jika sumbernya YouTube, langsung sedot pakai play-dl
+        if (track.source === "youtube") {
+            try {
+                const streamInfo = await play.stream(track.url, {
+                    discordPlayerCompatibility: true
+                });
+                return streamInfo.stream;
+            } catch (error) {
+                console.error("Play-DL Stream Error:", error.message);
+                return null; 
+            }
+        }
+        // Jika Spotify, biarkan Discord-Player handle bridginya dulu
+        return null;
+    }
+};
 
 // Load Commands
 client.commands = new Collection();
@@ -52,26 +107,18 @@ if (fs.existsSync(foldersPath)) {
     }
 }
 
-// --- EVENT READY (MODIFIKASI PENTING) ---
 client.once(Events.ClientReady, async () => {
-  // 1. KITA JANGAN PAKAI DefaultExtractors BIASA
-  // Karena extractor bawaan itulah yang diblokir hosting.
+  // A. Load Extractor Default
+  await client.player.extractors.loadMulti(DefaultExtractors);
   
-  // 2. Kita Register "YoutubeiExtractor" (Mode Android)
-  // Ini akan membypass blokir IP dengan berpura-pura menjadi HP Android
-  await client.player.extractors.register(YoutubeiExtractor, {
-      authentication: process.env.YOUTUBE_COOKIE || "" // Opsional, coba kosong dulu
-  });
+  // B. Register play-dl sebagai "Mesin Penyedot"
+  await client.player.extractors.register(PlayDLExtractor);
 
-  // 3. Load extractor lain secara manual jika perlu (biar tidak bentrok)
-  // Tapi untuk sekarang fokus ke Youtubei dulu.
-
-  console.log(`🤖 ${client.user.tag} Siap! (Engine: YouTubei Android)`);
+  console.log(`🤖 ${client.user.tag} Siap! (Engine: Hybrid Play-DL + Bridge)`);
 });
 
 // --- EVENT MUSIK ---
 client.player.events.on("playerStart", (queue, track) => {
-    // Filter TTS
     if (track.url.includes("google.com/translate_tts")) return;
 
     const requester = track.requestedBy ? track.requestedBy.username : "System";
@@ -85,7 +132,7 @@ client.player.events.on("playerStart", (queue, track) => {
             { name: 'Requested by', value: requester, inline: true }
         )
         .setColor('#FF69B4')
-        .setFooter({ text: 'Asisten Pribadi Asep - Eisha💕' });
+        .setFooter({ text: 'Asisten Pribadi Asep - Eisha 💕' });
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('pause').setEmoji('⏸️').setStyle(ButtonStyle.Secondary),
@@ -99,20 +146,16 @@ client.player.events.on("playerStart", (queue, track) => {
 
 client.player.events.on("playerError", (queue, error) => {
     console.log(`[Player Error] ${error.message}`);
-    // Auto skip jika error agar tidak macet
     if (!queue.metadata.isSkipping) {
         queue.metadata.isSkipping = true;
         queue.node.skip();
     }
 });
 
-// Event Debugging Ekstra (Biar tau kalau koneksi putus)
-client.player.events.on("error", (queue, error) => {
-    console.log(`[Connection Error] ${error.message}`);
-});
-
 // --- HANDLE INTERACTION ---
 client.on(Events.InteractionCreate, async (interaction) => {
+    
+    // --- KEAMANAN DENGAN ENV ---
     if (interaction.user.id !== MY_ID) {
         return interaction.reply({ content: "❌ Bot Pribadi.", ephemeral: true });
     }
