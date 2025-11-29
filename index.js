@@ -5,12 +5,13 @@ const {
     Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Events 
 } = require("discord.js");
 const { Player } = require("discord-player");
-const { DefaultExtractors } = require("@discord-player/extractor");
-const play = require('play-dl'); // Import play-dl
+
+// --- IMPORT LIBRARY PENYELAMAT ---
+const { YoutubeiExtractor } = require("discord-player-youtubei");
 
 process.env.FFMPEG_PATH = require("ffmpeg-static");
 
-const MY_ID = process.env.OWNER_ID;
+const MY_ID = "707811317053915207"; // ID Owner
 
 const client = new Client({
   intents: [
@@ -24,34 +25,13 @@ const client = new Client({
 client.player = new Player(client, {
   ytdlOptions: { 
       quality: "highestaudio", 
-      highWaterMark: 1 << 25 
+      highWaterMark: 1 << 25
   },
+  // Opsi ini mencegah bot crash jika stream gagal
   skipOnNoStream: true 
 });
 
-// --- SENJATA RAHASIA: PLAY-DL STREAMER ---
-// Ini memaksa bot menggunakan play-dl untuk mengambil suara, bukan downloader biasa
-client.player.extractors.register({
-    name: "play-dl-streamer",
-    async stream(track) {
-        // Cek jika sumbernya YouTube atau Spotify
-        if (track.source === "youtube" || track.source === "spotify") {
-            try {
-                // Cari info stream pakai play-dl
-                const streamInfo = await play.stream(track.url, {
-                    discordPlayerCompatibility: true
-                });
-                return streamInfo.stream;
-            } catch (error) {
-                // Fallback jika play-dl gagal (jarang terjadi)
-                return null;
-            }
-        }
-        return null;
-    }
-});
-// -----------------------------------------
-
+// Load Commands
 client.commands = new Collection();
 const foldersPath = path.join(__dirname, 'commands');
 
@@ -72,17 +52,30 @@ if (fs.existsSync(foldersPath)) {
     }
 }
 
+// --- EVENT READY (MODIFIKASI PENTING) ---
 client.once(Events.ClientReady, async () => {
-  // Load Default Extractors (Spotify, SoundCloud, dll)
-  await client.player.extractors.loadMulti(DefaultExtractors);
-  console.log(`🤖 ${client.user.tag} Siap! (Engine: Play-DL)`);
+  // 1. KITA JANGAN PAKAI DefaultExtractors BIASA
+  // Karena extractor bawaan itulah yang diblokir hosting.
+  
+  // 2. Kita Register "YoutubeiExtractor" (Mode Android)
+  // Ini akan membypass blokir IP dengan berpura-pura menjadi HP Android
+  await client.player.extractors.register(YoutubeiExtractor, {
+      authentication: process.env.YOUTUBE_COOKIE || "" // Opsional, coba kosong dulu
+  });
+
+  // 3. Load extractor lain secara manual jika perlu (biar tidak bentrok)
+  // Tapi untuk sekarang fokus ke Youtubei dulu.
+
+  console.log(`🤖 ${client.user.tag} Siap! (Engine: YouTubei Android)`);
 });
 
-// Event Musik
+// --- EVENT MUSIK ---
 client.player.events.on("playerStart", (queue, track) => {
+    // Filter TTS
     if (track.url.includes("google.com/translate_tts")) return;
 
     const requester = track.requestedBy ? track.requestedBy.username : "System";
+
     const embed = new EmbedBuilder()
         .setTitle(`💿 Sedang Memutar`)
         .setDescription(`**[${track.title}](${track.url})**`)
@@ -106,14 +99,19 @@ client.player.events.on("playerStart", (queue, track) => {
 
 client.player.events.on("playerError", (queue, error) => {
     console.log(`[Player Error] ${error.message}`);
-    // Auto skip jika error
+    // Auto skip jika error agar tidak macet
     if (!queue.metadata.isSkipping) {
         queue.metadata.isSkipping = true;
         queue.node.skip();
     }
 });
 
-// Handle Interaction
+// Event Debugging Ekstra (Biar tau kalau koneksi putus)
+client.player.events.on("error", (queue, error) => {
+    console.log(`[Connection Error] ${error.message}`);
+});
+
+// --- HANDLE INTERACTION ---
 client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.user.id !== MY_ID) {
         return interaction.reply({ content: "❌ Bot Pribadi.", ephemeral: true });
