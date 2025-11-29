@@ -24,6 +24,7 @@
     "google-tts-api": "^0.0.6",
     "libsodium-wrappers": "^0.7.15",
     "mediaplex": "^1.0.0",
+    "play-dl": "^1.9.7",
     "sodium-native": "^5.0.10",
     "youtube-sr": "^4.3.12",
     "ytdl-core": "^4.11.5"
